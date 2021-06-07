@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,17 +29,99 @@ public class MainActivity extends AppCompatActivity {
     List<SearchList> searchArrayList = new ArrayList<>();
     MovieListAdapter movieListAdapter;
 
+    private static final int PAGE_START = 1;
+    private boolean isLoading = false;
+    private boolean isLastPage = false;
+    private int TOTAL_PAGES = 5;
+    private int currentPage = PAGE_START;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-//        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
+        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        movieListAdapter = new MovieListAdapter(this);
         recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(linearLayoutManager);
+        recyclerView.setAdapter(movieListAdapter);
 
-        ApiInterface apiService = ApiClient.getClient().create(ApiInterface.class);
+        recyclerView.addOnScrollListener(new PaginationScrollListener(linearLayoutManager) {
+            @Override
+            protected void loadMoreItems() {
+                isLoading = true;
+                currentPage += 1;
+                loadNextPage();
+            }
+
+            @Override
+            public boolean isLastPage() {
+                return isLastPage;
+            }
+
+            @Override
+            public boolean isLoading() {
+                return isLoading;
+            }
+        });
+
+        loadFirstPage();
+
+
+    }
+
+
+
+        private void loadNextPage() {
+            ApiInterface apiService = ApiClient.getClient().create(ApiInterface.class);
+            Call<MovieResponse> call = apiService.getMoviesList("batman", "d378bdc1");
+            call.enqueue(new Callback<MovieResponse>() {
+                @Override
+                public void onResponse(Call<MovieResponse> call, Response<MovieResponse> response) {
+                    movieListAdapter.removeLoadingFooter();
+                    isLoading = false;
+
+                    searchArrayList = response.body().getSearchArrayList();
+                    movieListAdapter.addAll(searchArrayList);
+
+                    if (currentPage != TOTAL_PAGES) movieListAdapter.addLoadingFooter();
+                    else isLastPage = true;
+                }
+
+                @Override
+                public void onFailure(Call<MovieResponse> call, Throwable t) {
+                    t.printStackTrace();
+                }
+            });
+        }
+
+
+        private void loadFirstPage() {
+
+            ApiInterface apiService = ApiClient.getClient().create(ApiInterface.class);
+            Call<MovieResponse> call = apiService.getMoviesList("batman", "d378bdc1");
+            call.enqueue(new Callback<MovieResponse>() {
+                @Override
+                public void onResponse(Call<MovieResponse> call, Response<MovieResponse> response) {
+                    searchArrayList = response.body().getSearchArrayList();
+//                    progressBar.setVisibility(View.GONE);
+                    movieListAdapter.addAll(searchArrayList);
+
+                    if (currentPage <= TOTAL_PAGES) movieListAdapter.addLoadingFooter();
+                    else isLastPage = true;
+                }
+
+                @Override
+                public void onFailure(Call<MovieResponse> call, Throwable t) {
+
+                }
+
+            });
+        }
+
+
+      /*  ApiInterface apiService = ApiClient.getClient().create(ApiInterface.class);
 
         Call<MovieResponse> call = apiService.getMoviesList("batman", "d378bdc1");
         call.enqueue(new Callback<MovieResponse>() {
@@ -69,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.e(TAG, t.toString());
             }
         });
-    }
+    }*/
 
     @OnTextChanged(R.id.edit_search)
     public void search() {
@@ -88,5 +171,7 @@ public class MainActivity extends AppCompatActivity {
             movieListAdapter.updateList(temp);
         }
     }
+
+
 
 }
